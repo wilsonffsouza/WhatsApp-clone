@@ -7,9 +7,9 @@ export class CameraController {
         navigator.mediaDevices.getUserMedia({
             video: true
         }).then(screenStream => {
-            this._screenStream = screenStream
+            this._screenStream = screenStream;
             this._videoEl.srcObject = screenStream;
-            this._videoEl.play()
+            this._videoEl.play();
         }).catch(err => {
             console.error(err)
         })
