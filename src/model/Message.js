@@ -314,6 +314,7 @@ export class Message extends Model {
         div.firstElementChild.classList.add(className);
 
         return div;
+
     }
 
     static send(chatId, content) {
