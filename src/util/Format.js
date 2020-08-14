@@ -29,4 +29,15 @@ export class Format {
         return '';
 
     }
+
+    static dateToTime(date, locale = 'pt-BR') {
+        return date.toLocaleTimeString(locale, {
+            hours: '2-digit',
+            minutes: '2-digit'
+        });
+    }
+
+    static timeStampToTime(timeStamp) {
+        return (timeStamp && typeof timeStamp.toDate === 'function') ? Format.dateToTime(timeStamp.toDate()) : '';
+    }
 }
