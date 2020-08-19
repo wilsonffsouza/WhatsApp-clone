@@ -448,7 +448,9 @@ export class WhatsAppController {
         this.el.inputPhoto.on('change', e => {
 
             [...forEach.this.el.inputPhoto.files].forEach(file => {
-                console.log(file);
+
+                Message.sendImage(this._contactActive.chatId, this._user.email, file);
+
             });
 
         });
@@ -496,8 +498,21 @@ export class WhatsAppController {
 
         this.el.btnSendPicture.on('click', e => {
 
-            console.log(this.el.pictureCamera.src);
+            this.el.btnSendPicture.disabled = true;
 
+            let regex = /^data:(.+);base64,(.*)$/;
+            let result = this.el.pictureCamera.src.match(regex);
+            let mimeType = result[1];
+            let ext = mimeType.split('/')[1];
+            let filename = `camera${Date.now()}.${ext}`;
+
+            fetch(this.el.pictureCamera.src)
+                .then(res => { return res.arrayBuffer(); })
+                .then(buffer => { return new File([buffer], filename, { type: mimeType }); })
+                .then(file => {
+                    Message.sendImage(this._contactActive.chatId, this._user.email, file);
+                    this.el.btnSendPicture.disabled = false;
+                });
         });
 
 
