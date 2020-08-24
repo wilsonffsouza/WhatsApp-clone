@@ -1,6 +1,7 @@
 import { Model } from './Model'
 import { Firebase } from './../util/Firebase'
 import { Format } from '../util/Format';
+import { Upload } from '../util/Upload';
 
 export class Message extends Model {
 
@@ -51,25 +52,7 @@ export class Message extends Model {
 
     static upload(file, from) {
 
-        return new Promise((s, f) => {
-
-            let uploadTask = Firebase.hd().ref(from).child(Date.now() + '_' + file.name).put(file);
-
-            uploadTask.on('state_changed', e => {
-
-                console.info('upload', e);
-
-            }, err => {
-
-                f(err);
-
-            }, () => {
-
-                s(uploadTask.snapshot);
-
-            });
-
-        });
+        return Upload.send(file, from);
 
     }
 
@@ -77,12 +60,13 @@ export class Message extends Model {
 
         return Message.send(chatId, from, 'audio', '', false).then(msgRef => {
 
-            Message.upload(from, file).then(snapshot => {
-
-                console.log('metadata', metadata);
+            Message.upload(file, from).then(snapshot => {
+                let downloadFile = snapshot;
 
                 msgRef.set({
-                    content: snapshot.downloadURL,
+                    content: downloadFile,
+                    size: file.size,
+                    fileType: file.type,
                     photo,
                     duration: metadata.duration,
                     status: 'sent'
@@ -107,46 +91,40 @@ export class Message extends Model {
         return Message.send(chatId, from, 'document', '', false).then(msgRef => {
 
             Message.upload(file, from).then(snapshot => {
-                snapshot.ref.getDownloadURL().then(downloadURL => {
-                    let downloadFile = downloadURL;
+                let downloadFile = snapshot;
 
-                    if (filePreview) {
+                if (filePreview) {
 
-                        Message.upload(filePreview, from).then(snapshot2 => {
-                            snapshot2.ref.getDownloadURL().then(downloadURL => {
-                                let downloadPreview = downloadURL;
-
-                                msgRef.set({
-                                    content: downloadFile,
-                                    preview: downloadPreview,
-                                    filename: file.name,
-                                    size: file.size,
-                                    info,
-                                    fileType: file.type,
-                                    status: 'sent'
-                                }, {
-                                    merge: true
-                                });
-
-                            });
-
-                        });
-
-                    } else {
+                    Message.upload(filePreview, from).then(snapshot2 => {
+                        let downloadPreview = snapshot2;
 
                         msgRef.set({
                             content: downloadFile,
+                            preview: downloadPreview,
                             filename: file.name,
                             size: file.size,
+                            info,
                             fileType: file.type,
                             status: 'sent'
                         }, {
                             merge: true
                         });
 
-                    }
+                    });
 
-                });
+                } else {
+
+                    msgRef.set({
+                        content: downloadFile,
+                        filename: file.name,
+                        size: file.size,
+                        fileType: file.type,
+                        status: 'sent'
+                    }, {
+                        merge: true
+                    });
+
+                }
 
             });
 
@@ -159,15 +137,13 @@ export class Message extends Model {
         return new Promise((s, f) => {
 
             Message.upload(file, from).then(snapshot => {
-                snapshot.ref.getDownloadURL().then(downloadURL => {
-                    Message.send(
-                        chatId,
-                        from,
-                        'image',
-                        downloadURL
-                    ).then(() => {
-                        s();
-                    });
+                Message.send(
+                    chatId,
+                    from,
+                    'image',
+                    snapshot
+                ).then(() => {
+                    s();
                 });
             });
 
@@ -221,6 +197,7 @@ export class Message extends Model {
 
         let element = document.createElement('div');
 
+        element.id = `_${this.id}`;
         element.className = 'message';
 
         switch (this.type) {
@@ -270,7 +247,6 @@ export class Message extends Model {
                     img.show();
 
                 }
-
                 break;
 
             case 'document':
@@ -436,9 +412,7 @@ export class Message extends Model {
                                             <div class="_1sLSi">
                                                 <span class="nDKsM" style="width: 0%;"></span>
                                                 <input type="range" min="0" max="100" class="_3geJ8" value="0">
-                                                <audio>
-                                                    <source src="${this.content}" type="audio/webm">
-                                                </audio>
+                                                <audio src="${this.content}" preload="auto"></audio>
                                             </div>
                                         </div>
                                     </div>
@@ -491,32 +465,31 @@ export class Message extends Model {
                     img.src = this.photo;
                     img.show();
 
-                }
+                };
 
                 let audio = element.querySelector('audio');
                 let btnPlay = element.querySelector('.audio-play');
                 let btnPause = element.querySelector('.audio-pause');
-                let inputRange = element.querySelector('[type="range"]');
-
-                element.querySelector('.message-audio-duration').innerHTML = Format.toTime(this.duration * 1000);
+                let inputRange = element.querySelector('[type=range]');
+                let audioDuration = element.querySelector('.message-audio-duration');
 
                 audio.onloadeddata = e => {
 
                     element.querySelector('.audio-load').hide();
                     btnPlay.show();
 
-                }
+                };
 
                 audio.onplay = e => {
 
                     btnPlay.hide();
                     btnPause.show();
 
-                }
+                };
 
                 audio.onpause = e => {
 
-                    element.querySelector('.message-audio-duration').innerHTML = Format.toTime(this.duration * 1000);
+                    audioDuration.innerHTML = Format.toTime(this.duration * 1000);
                     btnPlay.show();
                     btnPause.hide();
 
@@ -527,7 +500,7 @@ export class Message extends Model {
                     btnPlay.hide();
                     btnPause.hide();
 
-                    element.querySelector('.message-audio-duration').innerHTML = Format.toTime(audio.currentTime * 1000);
+                    audioDuration.innerHTML = Format.toTime(audio.currentTime * 1000);
                     inputRange.value = (audio.currentTime * 100) / this.duration;
 
                     if (audio.paused) {
